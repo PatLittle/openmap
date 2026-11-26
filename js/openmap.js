@@ -1,28 +1,39 @@
 const UUID_REGEX = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const DATASET_PATH = /^\/(?:openmap|carteouverte)(?:\/(?:en|fr))?\/([^/]+)\/?$/;
+const LEGACY_PATH = /^\/(?:(?:openmap|carteouverte)\/)?(?:en|fr)(?:\.html)?\/?$/;
+const VIEWER_PATHS = { en: '/openmap/en', fr: '/carteouverte/fr' };
+const langcode = document.documentElement.lang.toLowerCase().startsWith('fr') ? 'fr' : 'en';
 
-// Validate UUIDs passed in the URL
-function getKeys(keys) {
-    return keys
-        .split(',')
-        .map(uuid => uuid.trim())
-        .filter(uuid => UUID_REGEX.test(uuid))
-        .join(',');
+function parseUuids(segment = '') {
+    // Decode URL-escaped separators (such as %2C) before splitting the list.
+    try {
+        segment = decodeURIComponent(segment);
+    } catch {
+        return [];
+    }
+    return segment.split(',').map(uuid => uuid.trim()).filter(uuid => UUID_REGEX.test(uuid));
 }
 
-const langcode = (document.documentElement.lang || '')
-                    .toLowerCase()
-                    .startsWith('fr')
-                    ? 'fr'
-                    : 'en';
+function viewerPath(lang, uuids) {
+    return VIEWER_PATHS[lang] + (uuids.length ? '/' + uuids.join(',') : '');
+}
 
-// Update the language link
-function syncLanguageSwitcherHash() {
+const { pathname, search } = window.location;
+const usesLegacyPath = LEGACY_PATH.test(pathname);
+const datasetUuids = parseUuids(usesLegacyPath
+    ? window.location.hash.slice(1)
+    : pathname.match(DATASET_PATH)?.[1]);
+
+// Old bookmarks still load the same layers. Replace the URL before analytics initializes.
+if (usesLegacyPath && datasetUuids.length) {
+    window.history.replaceState(window.history.state, '', viewerPath(langcode, datasetUuids) + search);
+}
+
+function syncLanguageSwitcher() {
     const targetLang = langcode === 'en' ? 'fr' : 'en';
-    const targetFile = `${targetLang}.html`;
     const langLink = document.querySelector(`#wb-lng a[hreflang='${targetLang}']`);
-    
     if (langLink) {
-        langLink.href = targetFile + window.location.hash;
+        langLink.href = viewerPath(targetLang, datasetUuids) + search;
     }
 }
 
@@ -49,16 +60,17 @@ function renderDatasetLink(uuid) {
             if (!ul) return;
             const li = document.createElement("li");
             const link = document.createElement("a");
-            link.href = `/data/${langcode}/dataset/${uuid}`;
+            link.href = `https://open.canada.ca/data/${langcode}/dataset/${uuid}`;
             const titleKey = langcode.startsWith('en') ? ['en', 'en-t-fr'] : ['fr', 'fr-t-en'];
             link.textContent = title[titleKey[0]] ?? title[titleKey[1]] ?? uuid;
             li.appendChild(link);
             ul.appendChild(li);
 
             // generate a page view event in GA4
+            const pagePath = viewerPath(langcode, [uuid]);
             gtag('event', 'page_view', {
-                page_location: `${window.location.origin}${window.location.pathname}#${uuid}`,
-                page_path: `${window.location.pathname}#${uuid}`,
+                page_location: `${window.location.origin}${pagePath}`,
+                page_path: pagePath,
                 page_title: document.title + '-' + link.textContent.trim()
             });
 
@@ -68,29 +80,22 @@ function renderDatasetLink(uuid) {
     });
 }
 
-async function getTitles(uuidList) {
-    if (!uuidList) return;
-
-    const uuids = uuidList.split(',').map(uuid => uuid.trim());
-
+async function getTitles(uuids) {
     for (const uuid of uuids) {
         await renderDatasetLink(uuid);
     }
 }
 
 // Add the Web analytics URL
-function getAnalyticsUrl(uuidList) {
-    if (!uuidList) return;
-
-    const filters = uuidList
-        .split(',')
-        .map(id => `id:${id.trim()}`)
+function getAnalyticsUrl(uuids) {
+    const filters = uuids
+        .map(id => `id:${id}`)
         .join('|');
     const ul = document.getElementById('web-analytics');
     if (!ul) return;
     const li = document.createElement("li");
     const link = document.createElement("a");
-    link.href = `/data/${langcode}/dataset/`
+    link.href = `https://open.canada.ca/data/${langcode}/dataset/`
         + '2916fad5-ebcc-4c86-b0f3-4f619b29f412/resource/15eeafa2-c331-44e7-b37f-d0d54a51d2eb?filters='
         + encodeURIComponent(filters);
     link.textContent =
@@ -101,18 +106,18 @@ function getAnalyticsUrl(uuidList) {
     ul.appendChild(li);
 }
 
-function renderFromHash() {
-    keys = getKeys(window.location.hash.substring(1));
-    if (!keys) return;
-    syncLanguageSwitcherHash();
-    getTitles(keys);
-    getAnalyticsUrl(keys);
-}
-window.addEventListener('DOMContentLoaded', renderFromHash);
-
-function safeReloadOnHashChange() {
-    if (window.location.hash && window.location.hash !== '#') {
-        window.location.reload();
+function renderDatasets() {
+    syncLanguageSwitcher();
+    if (datasetUuids.length) {
+        getTitles(datasetUuids);
+        getAnalyticsUrl(datasetUuids);
     }
 }
-window.addEventListener('hashchange', safeReloadOnHashChange);
+window.addEventListener('DOMContentLoaded', renderDatasets);
+
+window.addEventListener('hashchange', () => {
+    if (LEGACY_PATH.test(window.location.pathname) && parseUuids(window.location.hash.slice(1)).length) {
+        // A reload applies the new layer list through the same initialization path.
+        window.location.reload();
+    }
+});
