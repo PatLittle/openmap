@@ -123,7 +123,9 @@ cgpv.onMapInit((mapViewer) => {
         .flatMap(value => value.split(','))
         .map(value => value.trim())
         .filter(Boolean);
-    [...new Set(urls)].forEach((url, index) => {
+    const fileUrls = [...new Set(urls)];
+    window.openMapsAnalytics?.bind(viewer, fileUrls.length);
+    fileUrls.forEach((url, index) => {
         void addFileLayer(layer, url, index);
     });
 });
