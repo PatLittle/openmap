@@ -24,7 +24,7 @@
     }
   },
   "components": ["north-arrow", "overview-map"],
-  "theme": "geo.ca",
+  "theme": "dark",
   "corePackages": [],
   "externalPackages": []
 }

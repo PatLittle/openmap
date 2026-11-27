@@ -1,0 +1,21 @@
+# Shared assets are served from the repository root on Netlify.
+/openmap/css/*              /css/:splat      200
+/openmap/js/*               /js/:splat       200
+/openmap/config/*           /config/:splat   200
+/openmap/favicon.ico        /favicon.ico     200
+
+# Language-specific pages and legacy HTML entry points.
+/openmap/en.html            /en.html         200
+/openmap/fr.html            /fr.html         200
+/carteouverte/en.html       /en.html         200
+/carteouverte/fr.html       /fr.html         200
+/openmap/en                 /en.html         200
+/carteouverte/fr            /fr.html         200
+/openmap/en/:datasets       /en.html         200
+/carteouverte/fr/:datasets  /fr.html         200
+
+# Without a language segment, the first path segment determines the language.
+/openmap                    /en.html         200
+/carteouverte               /fr.html         200
+/openmap/:datasets          /en.html         200
+/carteouverte/:datasets     /fr.html         200
