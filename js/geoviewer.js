@@ -1,3 +1,8 @@
+const DEFAULT_NRCAN_ATTRIBUTIONS = new Set([
+    "© His Majesty the King in Right of Canada, as represented by the Minister of Natural Resources",
+    "© Sa Majesté le Roi du Chef du Canada, représentée par le ministre des Ressources naturelles",
+]);
+
 const FILE_LAYER_TYPES = {
     geojson: 'GeoJSON',
     json: 'GeoJSON',
@@ -92,8 +97,24 @@ async function addFileLayer(layer, value, index) {
     }
 }
 
+function customizeBasemapAttribution(mapViewer) {
+    const applyAttribution = (basemap) => {
+        const credits = basemap.attribution.map(credit =>
+            DEFAULT_NRCAN_ATTRIBUTIONS.has(credit) ? 'OGL-Canada 2.0' : credit
+        );
+        mapViewer.controllers.mapController.setAttribution(credits);
+    };
+
+    mapViewer.basemap.onBasemapChanged((_, { basemap }) => applyAttribution(basemap));
+    if (mapViewer.basemap.activeBasemap) {
+        applyAttribution(mapViewer.basemap.activeBasemap);
+    }
+}
+
 cgpv.onMapInit((mapViewer) => {
-    const { layer } = cgpv.api.getMapViewer(mapViewer.mapId);
+    const viewer = cgpv.api.getMapViewer(mapViewer.mapId);
+    customizeBasemapAttribution(viewer);
+    const { layer } = viewer;
     datasetUuids.forEach((uuid) => {
         layer.addGeoviewLayerByGeoCoreUUID(uuid);
     });
